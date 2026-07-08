@@ -1,0 +1,25 @@
+# Build multi-étapes : image de production légère, sans dépendances de développement.
+
+# --- Étape 1 : compilation ---
+FROM node:20-slim AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# --- Étape 2 : image finale ---
+# node:20-slim (Debian) plutôt qu'Alpine : évite les soucis de compilation
+# native de "sharp" (libvips) parfois rencontrés sur musl/Alpine.
+FROM node:20-slim
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+COPY --from=builder /app/dist ./dist
+
+RUN mkdir -p uploads
+EXPOSE 3000
+CMD ["node", "dist/main"]
