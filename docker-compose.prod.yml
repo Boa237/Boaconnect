@@ -1,0 +1,47 @@
+version: "3.9"
+
+# Déploiement production (voir docs/deployment-ubuntu.md).
+# Différences avec docker-compose.yml (dev) :
+# - Utilise Dockerfile.prod (build multi-étapes, sans devDependencies)
+# - Pas de bind mount du code source (l'image contient le build final)
+# - Pas d'Adminer exposé publiquement (à activer ponctuellement si besoin)
+
+services:
+  postgres:
+    image: postgis/postgis:15-3.3
+    container_name: mboa-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mboa_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Pas de port exposé publiquement : seul le backend (sur le même réseau Docker) y accède.
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: mboa-backend
+    restart: always
+    env_file:
+      - ./backend/.env
+    environment:
+      DB_HOST: postgres
+    ports:
+      - "3000:3000"
+    volumes:
+      - mboa_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  mboa_pgdata:
+  mboa_uploads:

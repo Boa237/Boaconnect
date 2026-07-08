@@ -1,0 +1,56 @@
+version: "3.9"
+
+# Orchestration locale pour Mboa Connect : PostgreSQL + backend NestJS + Adminer (UI DB).
+# Le mobile (Expo) tourne en dehors de Docker, sur la machine hôte.
+
+services:
+  postgres:
+    image: postgis/postgis:15-3.3
+    container_name: mboa-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-mboa_connect}
+      POSTGRES_USER: ${DB_USER:-mboa_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-mboa_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - mboa_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-mboa_user}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  adminer:
+    image: adminer:latest
+    container_name: mboa-adminer
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    depends_on:
+      - postgres
+
+  backend:
+    build:
+      context: ./backend
+    container_name: mboa-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      DB_HOST: postgres
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - mboa_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: npm run start:dev
+
+volumes:
+  mboa_pgdata:
+  mboa_uploads:
